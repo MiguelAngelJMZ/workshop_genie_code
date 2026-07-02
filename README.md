@@ -9,7 +9,6 @@ Workshop práctico que enseña a los equipos de datos y analítica de la **Ponti
 
 Todo el contenido está en español y contextualizado al ecosistema universitario chileno de [UC](https://www.uc.cl/): campus, matrículas diarias, Mi Portal UC, campañas de admisión y KPIs por macro-zona.
 
-Adaptado del [genie-code-workshop](https://github.com/boniche-cR/genie-code-workshop) de Marco Boniche, con ediciones previas Avianca y BIND.
 
 ## Estructura
 
@@ -304,18 +303,3 @@ Paleta alineada con [uc.cl](https://www.uc.cl/) — **azul institucional** con a
 | Tracks | `#E40006` / `#B0000B` / `#7C3AED` / `#0891B2` | DE / BI / DS / Gov |
 
 Fuente: DM Sans (con DM Mono para bloques de código).
-
-## Participantes por track
-
-| Track | Participantes |
-|---|---|
-| Data Engineering | 15 |
-| BI & Analytics | 12 |
-| Data Science & ML | 8 |
-| Data Governance | 5 |
-
-## Créditos
-
-- Fuente original: [boniche-cR/genie-code-workshop](https://github.com/boniche-cR/genie-code-workshop) — Marco Boniche (Databricks).
-- Ediciones Avianca y BIND: adaptaciones previas del workshop Genie Code.
-- Adaptación PUC: workshop Genie Code para el ecosistema académico de la Pontificia Universidad Católica de Chile.
