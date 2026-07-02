@@ -1,0 +1,416 @@
+{
+  "tracks": [
+    {
+      "id": "data-engineering",
+      "title": "Data Engineering",
+      "subtitle": "Acelera tus pipelines con Genie Code",
+      "description": "Usa Genie Code para generar pipelines PySpark, automatizar ingestas desde SIGUC, reconciliar datos entre fuentes académicas y crear Lakeflow Jobs — todo desde lenguaje natural.",
+      "icon": "⚙️",
+      "color": "#E40006",
+      "estimatedMinutes": 65,
+      "participantCount": 15,
+      "steps": [
+        {
+          "id": "eng-step-1",
+          "stepNumber": 1,
+          "title": "Explora el catálogo de PUC",
+          "description": "Abre un notebook nuevo y activa Genie Code (botón ✨ arriba a la derecha). Explora las tablas compartidas del workshop; más adelante crearás tablas personales con tu prefijo de usuario.",
+          "prompt": "Muéstrame las 5 tablas compartidas del workshop en el catálogo workshop_genie_code, schema gold (dim_campus, fact_matriculas_diarias, fact_portal_uc_activity, fact_campanas_admision, fact_daily_kpis). Para cada tabla muéstrame:\n1. Nombre de la tabla\n2. Número de filas\n3. Lista de columnas con sus tipos\n4. 3 filas de ejemplo\n\nFormatea todo como tablas legibles.\n\nNota: en los siguientes pasos crearás tablas propias con prefijo `{nombre_usuario}_`; aquí solo exploramos las fuentes compartidas.",
+          "expectedOutput": "Una o más celdas que muestran las 5 tablas (dim_campus, fact_matriculas_diarias, fact_portal_uc_activity, fact_campanas_admision, fact_daily_kpis) con sus schemas y datos de ejemplo.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Si Genie Code no responde, asegúrate de tener un cluster activo asignado al notebook.",
+            "Si no ves las tablas, verifica que tienes acceso a workshop_genie_code.gold."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "eng-step-2",
+          "stepNumber": 2,
+          "title": "Genera un pipeline de ingestión completo",
+          "description": "Imagina que el equipo de Admisión y Registro Académico envía un CSV con datos de nuevos campus. Usa Genie Code para generar un pipeline completo bronze → silver → gold siguiendo la arquitectura medallion.",
+          "prompt": "Genera un pipeline PySpark completo para ingestar datos de campus PUC desde un CSV. El pipeline debe seguir la arquitectura medallion:\n\n1. **Bronze**: Lee el CSV desde /Volumes/workshop_genie_code/gold/raw/new_campus.csv con schema inference. Guárdalo como tabla Delta en workshop_genie_code.bronze.{nombre_usuario}_campus_raw con modo overwrite.\n\n2. **Silver**: Lee la tabla bronze. Aplica estas transformaciones:\n   - Elimina duplicados por campus_id\n   - Valida que region no sea null (filtra los null)\n   - Convierte fecha_inauguracion a tipo DATE\n   - Estandariza tipo_campus a Title Case\n   - Normaliza codigo_uc a mayúsculas\n   Guarda en workshop_genie_code.silver.{nombre_usuario}_campus_cleaned\n\n3. **Gold**: Lee la tabla silver. Agrega:\n   - Conteo de campus por region y tipo_campus\n   - Fecha de el campus más antiguo y más nuevo por region\n   Guarda en workshop_genie_code.gold.{nombre_usuario}_campus_summary\n\nIncluye TBLPROPERTIES con 'layer' y 'quality' en cada tabla. Habilita Change Data Feed.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "3 celdas de código PySpark, una por capa (bronze, silver, gold). Cada una con spark.read, transformaciones y write con TBLPROPERTIES.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "El CSV fuente se crea al ejecutar `generate_workshop_data.py`: `/Volumes/workshop_genie_code/gold/raw/new_campus.csv`. Si el volumen no existe, vuelve a correr ese notebook primero.",
+            "Este es exactamente el patrón que necesitas para mover ingestas desde el sistema académico legado (SIGUC) a Lakeflow Jobs."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "eng-step-4",
+          "stepNumber": 3,
+          "title": "Genera la definición de un Lakeflow Job",
+          "description": "Los pipelines necesitan orquestación. Usa Genie Code para generar la configuración de un Job multi-tarea que ejecute tu pipeline del Step 2.",
+          "prompt": "Genera el código Python usando el Databricks SDK para crear un Job con 3 tareas encadenadas:\n\n1. Tarea 'ingest_bronze': ejecuta un notebook en /Workspace/Users/{current_user}/puc/01_bronze\n2. Tarea 'transform_silver': ejecuta /Workspace/Users/{current_user}/puc/02_silver, depende de ingest_bronze\n3. Tarea 'aggregate_gold': ejecuta /Workspace/Users/{current_user}/puc/03_gold, depende de transform_silver\n\nConfiguraciones:\n- Cluster: nuevo job cluster con Photon, node type Standard_DS3_v2, 1 worker\n- Schedule: cron diario a las 5am UTC\n- Timeout: 30 minutos por tarea\n- Notificaciones: email a mi usuario si falla\n\nUsa databricks.sdk.service.jobs para crear el Job.",
+          "expectedOutput": "Código Python con WorkspaceClient() que define las 3 tareas con dependencias, cluster config, schedule y crea el Job vía API.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "No necesitas ejecutar esto ahora — el objetivo es ver cómo Genie Code genera definiciones de Jobs complejas.",
+            "Este es el patrón base para reemplazar pipelines del sistema académico legado por Lakeflow Jobs en PUC."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "eng-step-7",
+          "stepNumber": 4,
+          "title": "Genera documentación automática",
+          "description": "Los datos sin documentación no son útiles. Usa Genie Code para auto-generar un data dictionary de todas las tablas del catálogo workshop_genie_code.",
+          "prompt": "Genera un notebook que auto-documente todas las tablas en workshop_genie_code.gold cuyo nombre empiece con `{nombre_usuario}_` (las tablas personales que creaste en este workshop, p. ej. campus_summary):\n\n1. Para cada tabla, genera:\n   - Nombre y descripción (infiere la descripción del contenido)\n   - Lista de columnas con tipo, si es nullable, y una descripción inferida\n   - Row count y fecha del dato más reciente (si tiene columna de fecha)\n   - 3 filas de ejemplo\n\n2. Formatea todo como markdown limpio que pueda copiarse a Confluence o el portal interno de Datos UC.\n\n3. Al final, muestra un resumen: tabla, filas, columnas, última actualización.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Markdown con la documentación de las tablas `{nombre_usuario}_*` del participante. Si aún no creaste ninguna, ejecuta primero el Step 2.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Este output puedes compartirlo directamente con el equipo de Gobierno como documentación oficial.",
+            "Adapta el catálogo y schema a tus propias tablas de producción."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "eng-step-8",
+          "stepNumber": 5,
+          "title": "Reflexión: ¿dónde aplicas esto mañana?",
+          "description": "Último paso. Piensa en tu trabajo actual y escribe en una celda markdown las respuestas a estas preguntas. Las compartirás con tu grupo en la actividad final.",
+          "prompt": null,
+          "expectedOutput": null,
+          "tips": [
+            "1. ¿Qué pipeline del sistema académico legado (SIGUC) podrías acelerar con Genie Code esta semana?",
+            "2. ¿Qué 'instruction' o 'skill' crearías para estandarizar el output de Genie Code en tu equipo?",
+            "3. Si pudieras automatizar UNA cosa de tu trabajo diario con Genie Code, ¿qué sería?"
+          ],
+          "warningNote": null
+        }
+      ],
+      "faq": [
+        {
+          "question": "Genie Code no genera código, ¿qué hago?",
+          "answer": "Verifica que tienes un cluster activo asignado al notebook (esquina superior derecha). Si el cluster está iniciando, espera 1-2 minutos."
+        },
+        {
+          "question": "El código generado tiene errores al ejecutar",
+          "answer": "Copia el error completo y pégalo en Genie Code con el mensaje: 'Este código tiene un error: [error]. Corrígelo manteniendo la misma lógica.'"
+        },
+        {
+          "question": "No tengo acceso al catálogo workshop_genie_code",
+          "answer": "Avisa al facilitador del workshop. Necesitas permisos de USE CATALOG y SELECT en workshop_genie_code.gold. Las tablas compartidas del workshop (`workshop_genie_code.gold.*`) son solo lectura. Crea tus propias tablas como `workshop_genie_code.<schema>.{nombre_usuario}_<nombre>` para no pisar el trabajo de otros participantes."
+        },
+        {
+          "question": "El Foundation Model API no responde (Step 6)",
+          "answer": "Verifica que el endpoint se llama 'databricks-claude-sonnet-4'. Si no funciona, el facilitador tiene un notebook de respaldo."
+        },
+        {
+          "question": "¿Puedo usar estos prompts con mis propias tablas?",
+          "answer": "Sí. Las tablas compartidas del workshop (`workshop_genie_code.gold.*`) son solo lectura. Crea tus propias tablas como `workshop_genie_code.<schema>.{nombre_usuario}_<nombre>` para no pisar el trabajo de otros participantes."
+        }
+      ]
+    },
+    {
+      "id": "bi-analytics",
+      "title": "BI & Analytics",
+      "subtitle": "De la pregunta al dashboard, en minutos",
+      "description": "Genera SQL desde lenguaje natural, traduce DAX a SQL, construye Metric Views, configura Genie Spaces y crea dashboards AI/BI para la Pontificia Universidad Católica de Chile.",
+      "icon": "📊",
+      "color": "#B0000B",
+      "estimatedMinutes": 65,
+      "participantCount": 12,
+      "steps": [
+        {
+          "id": "bi-step-1",
+          "stepNumber": 1,
+          "title": "De lenguaje natural a SQL",
+          "description": "Abre un notebook SQL (o Python) y activa Genie Code. Practica generar queries complejas desde preguntas en español.",
+          "prompt": "Escribe una consulta SQL que responda: ¿Cuáles fueron los 10 campus con mayor ingreso total de matrículas en los últimos 6 meses?\n\nUsa las tablas workshop_genie_code.gold.fact_matriculas_diarias y workshop_genie_code.gold.dim_campus.\nIncluye: codigo_uc, comuna, región, ingreso total de matrículas, matrículas totales, arancel promedio, y el porcentaje que representa cada campus del total.\nOrdena por ingreso de matrículas descendente.\n\nGuarda el resultado en una tabla Delta personal: `workshop_genie_code.gold.{nombre_usuario}_top_campus_ingreso de matrículas` (modo overwrite).\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Consulta SQL con JOIN y window function, más `CREATE OR REPLACE TABLE` hacia `workshop_genie_code.gold.{nombre_usuario}_top_campus_ingreso de matrículas`.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Mientras más específico seas con las columnas y formato, mejor será el SQL generado.",
+            "Prueba variar la pregunta: agrega filtros por tipo_actividad o cambia el período."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "bi-step-3",
+          "stepNumber": 2,
+          "title": "Crea una Metric View",
+          "description": "Las Metric Views son la nueva forma de definir métricas reutilizables en Unity Catalog. Usa Genie Code para generar la definición YAML.",
+          "prompt": "Genera la definición completa de una Metric View en YAML para la métrica 'Ingreso de matrículas por Pasajero' (arancel promedio) con estas características:\n\n- Nombre: {nombre_usuario}_ticket_promedio_by_region\n- Tabla fuente: workshop_genie_code.gold.fact_matriculas_diarias\n- Medida: SUM(ingreso_matricula_clp) / SUM(matriculas_exitosas)\n- Dimensiones: region (desde dim_campus via JOIN sobre campus_id), fecha_matricula, region_nombre\n- Filtros disponibles: region, date range, tipo_campus\n- Granularidad temporal: diaria, semanal y mensual\n\nTambién genera el comando SQL CREATE METRIC VIEW para registrarla en Unity Catalog.\n\nRegistra la Metric View en Unity Catalog como `workshop_genie_code.gold.{nombre_usuario}_ticket_promedio_by_region`.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Una definición YAML con la estructura de Metric View (source, measures, dimensions, filters) y el comando CREATE METRIC VIEW correspondiente.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Las Metric Views reemplazan medidas DAX y reportes Power BI / Tableau legacy como capa semántica única. Cualquier herramienta puede consumirlas.",
+            "Empieza por tus KPIs más usados: arancel promedio, tasa de éxito, sla cumplimiento, retención estudiantil."
+          ],
+          "warningNote": "Metric Views puede requerir un workspace con la feature habilitada. Si no funciona el CREATE, el YAML sigue siendo útil como documentación."
+        },
+        {
+          "id": "bi-step-4",
+          "stepNumber": 3,
+          "title": "Configura un Genie Space",
+          "description": "Los Genie Spaces permiten que usuarios no técnicos (comercial, planning, matrículas) hagan preguntas sobre datos en lenguaje natural. Usa Genie Code para preparar la configuración.",
+          "prompt": "Genera la configuración completa para un Genie Space de 'Análisis de Admisión y Registro Académico y Ingreso de matrículas' que incluya:\n\n1. **Instrucciones del Space** (system instructions en español):\n   - Contexto: datos operacionales y comerciales de PUC\n   - Tablas disponibles y qué contiene cada una\n   - Reglas: siempre responder en español, usar formato de moneda CLP, mostrar tasa de éxito y cumplimiento SLA como porcentaje con 1 decimal\n   - Preguntas que NO puede responder (datos de datos personales sensibles de estudiantes, costos detallados de información salarial de académicos por operación)\n\n2. **5 preguntas de ejemplo** (sample questions) que un usuario de negocio haría\n\n3. **Los GRANT statements** necesarios para que el grupo 'puc_business_users' pueda usar el Space\n\nUsa como fuentes de lectura las tablas compartidas `workshop_genie_code.gold.fact_matriculas_diarias`, `workshop_genie_code.gold.dim_campus` y `workshop_genie_code.gold.fact_daily_kpis`. El Genie Space es personal por participante; no modifiques las tablas compartidas.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Un bloque de texto con las instrucciones del Genie Space, 5 preguntas de ejemplo (como '¿Cuál fue el tasa de éxito de la región Región Metropolitana la semana pasada?'), y los comandos GRANT sobre las tablas.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Las instrucciones del Genie Space son como las 'workspace instructions' — moldean cómo responde el asistente.",
+            "Cuanto mejor el contexto de negocio (no solo técnico), mejores las respuestas."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "bi-step-7",
+          "stepNumber": 4,
+          "title": "Genie Supervisor: conecta múltiples espacios",
+          "description": "Un Genie Supervisor puede orquestar múltiples Genie Spaces para responder preguntas que cruzan dominios (Admisión y Registro Académico + Comercial + PUC24).",
+          "prompt": "Explica y genera la configuración para un Genie Supervisor que conecte 3 Genie Spaces:\n\n1. Space 'Admisión y Registro Académico': tablas fact_matriculas_diarias, dim_campus\n2. Space 'Admisión y Campañas': tablas fact_campanas_admision, fact_portal_uc_activity\n3. Space 'KPIs Ejecutivos': tabla fact_daily_kpis\n\nEl Supervisor debe:\n- Determinar automáticamente qué Space(s) consultar según la pregunta\n- Combinar resultados si la pregunta cruza dominios\n- Responder en español\n\nGenera las instrucciones del Supervisor y un ejemplo de cómo respondería a: '¿Qué promociones impactaron más el ingreso de matrículas de la región Región Metropolitana en el último trimestre y cuántos miembros pucX participaron?'\n\nEn las instrucciones, referencia las tablas compartidas del workshop por su nombre completo (`workshop_genie_code.gold.<tabla>`). Cada participante configura su propio Supervisor; no se requieren tablas nuevas.",
+          "expectedOutput": "Una explicación del patrón Supervisor con instrucciones de routing, y un ejemplo de cómo el Supervisor delegaría la pregunta a los Spaces de Admisión y Registro Académico y Admisión para combinar la respuesta.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "El Genie Supervisor es un patrón avanzado — hoy vemos la arquitectura, la implementación puede ser un proyecto de seguimiento con el equipo de datos.",
+            "Ideal para preguntas ejecutivas que necesitan datos de varios dominios."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "bi-step-8",
+          "stepNumber": 5,
+          "title": "Reflexión: ¿dónde aplicas esto mañana?",
+          "description": "Último paso. Piensa en tu trabajo actual y escribe las respuestas para compartir con tu grupo.",
+          "prompt": null,
+          "expectedOutput": null,
+          "tips": [
+            "1. ¿Qué reporte de reportes Power BI / Tableau legacy podrías migrar más rápido usando Genie Code para generar SQL?",
+            "2. ¿Qué Genie Space sería más valioso para Comercial, Admisión y Registro Académico o PUC24?",
+            "3. ¿Qué medida DAX o KPI traducirías primero a una Metric View?"
+          ],
+          "warningNote": null
+        }
+      ],
+      "faq": [
+        {
+          "question": "¿Puedo ejecutar SQL directamente en un notebook?",
+          "answer": "Sí. Crea una celda y escribe %sql al inicio, o crea un notebook de tipo SQL directamente."
+        },
+        {
+          "question": "Las AI Functions (ai_query, ai_classify) no funcionan",
+          "answer": "Necesitas un SQL Warehouse con Foundation Model API habilitado. Pregunta al facilitador cuál warehouse usar."
+        },
+        {
+          "question": "¿Cómo creo un Genie Space?",
+          "answer": "Ve a la barra lateral → New → Genie Space. Pega las instrucciones y sample questions del Step 4."
+        },
+        {
+          "question": "El SQL generado tiene errores de sintaxis",
+          "answer": "Copia el error y pégalo en Genie Code: 'Esta consulta tiene un error: [error]. Corrígela para Databricks SQL.'"
+        },
+        {
+          "question": "¿Puedo usar estas queries con mis tablas de producción?",
+          "answer": "Sí. Las tablas compartidas del workshop (`workshop_genie_code.gold.*`) son solo lectura. Crea tus propias tablas como `workshop_genie_code.<schema>.{nombre_usuario}_<nombre>` para no pisar el trabajo de otros participantes."
+        }
+      ]
+    },
+    {
+      "id": "data-science",
+      "title": "Data Science & ML",
+      "subtitle": "Del experimento al modelo en producción",
+      "description": "Usa Genie Code para EDA, feature engineering, MLflow, Model Serving y applyInPandas — pensado para forecasting de matrículas y predicción de deserción estudiantil.",
+      "icon": "🧠",
+      "color": "#7C3AED",
+      "estimatedMinutes": 65,
+      "participantCount": 8,
+      "steps": [
+        {
+          "id": "ds-step-1",
+          "stepNumber": 1,
+          "title": "EDA automatizado con Genie Code",
+          "description": "Usa Genie Code para generar un análisis exploratorio completo de los datos de matrículas diarios.",
+          "prompt": "Haz un análisis exploratorio completo de workshop_genie_code.gold.fact_matriculas_diarias:\n\n1. Estadísticas descriptivas de todas las columnas numéricas\n2. Distribución de ingreso_matricula_clp con histograma (Plotly)\n3. Serie temporal: ingreso de matrículas diario promedio (todas las campus) con línea de tendencia\n4. Heatmap de correlación entre variables numéricas\n5. Boxplot de tasa_exito_pct por día de la semana\n6. Descomposición temporal: tendencia, estacionalidad semanal, y ruido para una campus de ejemplo (MET-CC)\n\nUsa colores PUC: amarillo #003DA5 para la serie principal, azul #001A5C para la secundaria, fondo blanco.",
+          "expectedOutput": "6 visualizaciones Plotly inline mostrando la distribución, tendencias, correlaciones y patrones estacionales de los datos de matrículas.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Este notebook de EDA es reutilizable — cámbialo a cualquier tabla y obtienes un perfil completo.",
+            "La descomposición temporal es clave para el forecasting que haremos después."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "ds-step-2",
+          "stepNumber": 2,
+          "title": "Feature engineering para demand forecasting",
+          "description": "Genera un pipeline de features temporales para predecir matrículas diarios por campus.",
+          "prompt": "Crea un pipeline de feature engineering en PySpark para predecir total de matrículas diarios por campus:\n\n1. Filtra los datos de la campus 'CAM-MET-0001' para tener un ejemplo limpio\n2. Genera estas features:\n   - day_of_week (0-6)\n   - month (1-12)\n   - is_weekend (boolean)\n   - week_of_year\n   - is_holiday_season (Dic-Ene, Jul, Semana Santa)\n   - lag_7d (matrículas hace 7 días)\n   - lag_14d (matrículas hace 14 días)\n   - rolling_mean_7d (promedio móvil 7 días)\n   - rolling_mean_28d (promedio móvil 28 días)\n   - days_since_start (feature de tendencia lineal)\n3. Elimina filas con NULLs generados por los lags\n4. Divide en train (todo excepto últimos 30 días) y test (últimos 30 días)\n5. Muestra las dimensiones de train y test, y un sample de las features\n\n6. Persiste train y test como tablas Delta:\n   - `workshop_genie_code.gold.{nombre_usuario}_features_train`\n   - `workshop_genie_code.gold.{nombre_usuario}_features_test`\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Un notebook con window functions de PySpark para generar lags y rolling means, split temporal, y display de las shapes (train: ~700 filas, test: 30 filas).",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Lags y rolling means son las features más poderosas para series temporales — más que la estacionalidad.",
+            "El split temporal (no random) es crucial: nunca mezcles futuro con pasado en time series."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "ds-step-3",
+          "stepNumber": 3,
+          "title": "Entrena y registra con MLflow",
+          "description": "Entrena un modelo XGBoost para forecasting de matrículas y regístralo en MLflow con todos los artefactos.",
+          "prompt": "Entrena un XGBRegressor para predecir total de matrículas leyendo las features desde `workshop_genie_code.gold.{nombre_usuario}_features_train` y `workshop_genie_code.gold.{nombre_usuario}_features_test`:\n\n1. Configura el MLflow experiment: '/puc/ingreso de matrículas-forecasting'\n2. Dentro de un mlflow.start_run():\n   - Log params: n_estimators=200, max_depth=6, learning_rate=0.05\n   - Fit el modelo en train\n   - Evalúa en test: calcula RMSE, MAE, MAPE, R²\n   - Log todas las métricas\n   - Log el modelo con mlflow.sklearn.log_model (artifact_path='model')\n   - Set tags: layer='gold', team='advanced-analytics'\n3. Registra el modelo en Unity Catalog: workshop_genie_code.gold.{nombre_usuario}_ingreso de matrículas_forecast_model\n4. Muestra métricas y 2 charts:\n   - Predicted vs Actual (scatter con diagonal)\n   - Feature importances (horizontal bar, top 10)\n\nUsa colores PUC (amarillo #003DA5 y azul #001A5C) en los charts.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Un MLflow run con params, metrics, model artifact y tags. Dos charts Plotly mostrando la calidad del modelo. R² esperado: ~0.85-0.95.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "El patrón mlflow.start_run() → log_params → log_metrics → log_model es el estándar para TODO modelo en Databricks.",
+            "Registrar en Unity Catalog permite versionar y gobernar modelos como cualquier otro dato."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "ds-step-6",
+          "stepNumber": 4,
+          "title": "Escala con applyInPandas",
+          "description": "Entrena un modelo POR campus en paralelo usando grouped map UDFs — el patrón clásico para forecasting a escala en una red de 60+ campus/unidades UC.",
+          "prompt": "Genera un notebook que entrene un modelo XGBoost POR CAMPUS usando applyInPandas:\n\n1. Lee `workshop_genie_code.gold.fact_matriculas_diarias` (tabla compartida, solo lectura) y genera las features del Step 2 para TODAS las campus\n2. Define una función train_campus_model(pdf: pd.DataFrame) que:\n   - Recibe un pandas DataFrame (datos de UN campus)\n   - Genera features, split temporal, entrena XGBoost\n   - Log a MLflow con tag campus_id\n   - Retorna un DataFrame con: campus_id, rmse, mae, r2, run_id\n3. Aplica con: df.groupBy('campus_id').applyInPandas(train_campus_model, schema=result_schema)\n4. Limita a las 20 campus con más datos (para velocidad en el workshop)\n5. Muestra la tabla de resultados y un chart de R² por campus\n\nUsa el schema: campus_id STRING, rmse DOUBLE, mae DOUBLE, r2 DOUBLE, run_id STRING\n\n6. Guarda el resumen de métricas por campus en `workshop_genie_code.gold.{nombre_usuario}_forecast_model_metrics`.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Un notebook que entrena 20 modelos en paralelo (~2-3 minutos). La tabla muestra métricas por campus. El chart de R² muestra qué campus son más predecibles.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "applyInPandas distribuye el entrenamiento en paralelo — 20 modelos toman casi lo mismo que 1.",
+            "Este es el patrón para forecasting a escala: un modelo por campus/ruta/segmento."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "ds-step-8",
+          "stepNumber": 5,
+          "title": "Reflexión: ¿dónde aplicas esto mañana?",
+          "description": "Último paso. Piensa en tus proyectos actuales y cómo Genie Code cambia tu flujo de trabajo.",
+          "prompt": null,
+          "expectedOutput": null,
+          "tips": [
+            "1. ¿Qué modelo en tu backlog (forecasting de ingreso de matrículas transaccional, propensión PUC24, deserción temprana) podrías prototipar más rápido?",
+            "2. ¿Qué parte del flujo ML (EDA, features, training, serving) te consume más tiempo hoy?",
+            "3. ¿Qué 'skill' de Genie Code crearías para que tu equipo siga el estándar de MLflow logging?"
+          ],
+          "warningNote": null
+        }
+      ],
+      "faq": [
+        {
+          "question": "El modelo tiene un R² muy bajo",
+          "answer": "Verifica que el split temporal es correcto (últimos 30 días como test, no random). Si el R² < 0.5, puede haber un bug en las features — revisa que los lags se calcularon correctamente."
+        },
+        {
+          "question": "MLflow no encuentra el experiment",
+          "answer": "El experiment se crea automáticamente con mlflow.set_experiment(). Verifica que el path comience con '/puc/'."
+        },
+        {
+          "question": "Model Serving tarda mucho en iniciar",
+          "answer": "Es normal — serverless puede tardar 5-10 minutos en cold-start. Mientras tanto, avanza al Step 6 (applyInPandas)."
+        },
+        {
+          "question": "applyInPandas falla con error de schema",
+          "answer": "El schema del resultado debe coincidir exactamente con lo que retorna la función. Verifica que retornas un DataFrame con las columnas correctas."
+        },
+        {
+          "question": "¿Puedo usar esto con mis datos de producción?",
+          "answer": "Sí. Cambia la tabla fuente y ajusta las features a tu dominio. El patrón MLflow + applyInPandas es el mismo."
+        }
+      ]
+    },
+    {
+      "id": "data-governance",
+      "title": "Data Governance",
+      "subtitle": "Automatiza calidad y escala Data Academy",
+      "description": "Genera checks de data quality, frameworks de DQ reutilizables, políticas CLS/RLS y materiales de Data Academy para PUC — todo con Genie Code.",
+      "icon": "🛡️",
+      "color": "#0891B2",
+      "estimatedMinutes": 65,
+      "participantCount": 5,
+      "steps": [
+        {
+          "id": "gov-step-1",
+          "stepNumber": 1,
+          "title": "Genera checks de calidad desde lenguaje natural",
+          "description": "Describe reglas de calidad en español y deja que Genie Code genere el código PySpark.",
+          "prompt": "Genera funciones PySpark de data quality para las siguientes reglas:\n\n1. **check_nulls(df, columns: list)** → Para cada columna, cuenta los NULLs y retorna un dict con {columna: null_count}\n2. **check_duplicates(df, key_columns: list)** → Cuenta filas duplicadas en las columnas clave\n3. **check_referential_integrity(df, fk_col, ref_df, pk_col)** → Cuenta filas donde el FK no existe en la tabla de referencia\n4. **check_value_range(df, col, min_val, max_val)** → Cuenta valores fuera del rango\n5. **check_freshness(df, date_col, max_age_days: int)** → Verifica si el dato más reciente tiene menos de max_age_days días\n\nCada función debe retornar un diccionario con: check_name, table_name, status ('PASS'/'FAIL'/'WARN'), metric (el número), detail (descripción).\n\nPrueba cada función contra la tabla compartida `workshop_genie_code.gold.dim_campus` (solo lectura).",
+          "expectedOutput": "5 funciones PySpark reutilizables. Al probarlas contra dim_campus, deberían detectar: 15 nulls en region, 5 duplicados en campus_id, y 12 coordenadas en (0,0).",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Estas funciones son el building block para toda automatización de DQ.",
+            "El formato de retorno estandarizado (check_name, status, metric) permite agregar resultados de múltiples checks."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "gov-step-2",
+          "stepNumber": 2,
+          "title": "Profiling automatizado de todas las tablas",
+          "description": "Ejecuta un profiling completo que descubra problemas de calidad en todas las tablas del catálogo workshop_genie_code.",
+          "prompt": "Crea un notebook que haga profiling automático de las 5 tablas **compartidas** en workshop_genie_code.gold (dim_campus, fact_matriculas_diarias, fact_portal_uc_activity, fact_campanas_admision, fact_daily_kpis):\n\nPara cada tabla muestra:\n1. Row count\n2. Conteo de NULLs por columna (como tabla)\n3. Conteo de duplicados en la primary key (inferir la PK por nombre: *_id)\n4. Para columnas numéricas: min, max, mean, stddev, y valores sospechosos (negativos donde no debería, >100% donde es porcentaje)\n5. Para columnas string: valores únicos, top 5 más frecuentes, y valores inconsistentes (misma palabra con diferente capitalización)\n6. Para columnas date: rango, gaps, y fechas futuras\n\nGenera un resumen final tipo scorecard: tabla, total_checks, passed, failed, score (%).\n\nOpcional: guarda el scorecard en `workshop_genie_code.gold.{nombre_usuario}_dq_profiling_scorecard`.",
+          "expectedOutput": "Un profiling detallado que descubre los ~360 defectos plantados: nulls, duplicados, valores negativos, capitalización inconsistente, fechas futuras, etc. El scorecard muestra que ninguna tabla está al 100%.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Este notebook es el primer paso de cualquier auditoría de datos — úsalo en tablas de producción de PUC.",
+            "Los defectos que encontraste son representativos de problemas reales en cualquier data lake."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "gov-step-3",
+          "stepNumber": 3,
+          "title": "Framework de DQ configurable",
+          "description": "Crea un framework reutilizable donde las reglas se definen en un diccionario y un runner las ejecuta todas.",
+          "prompt": "Crea un framework de data quality con dos partes:\n\n1. **Configuración de reglas** (diccionario Python):\n```python\ndq_rules = {\n    'dim_campus': [\n        {'check': 'nulls', 'columns': ['region', 'localidad', 'tipo_campus']},\n        {'check': 'duplicates', 'key_columns': ['campus_id']},\n        {'check': 'value_range', 'col': 'latitude', 'min': -60, 'max': 60},\n        {'check': 'value_range', 'col': 'aulas_habilitadas', 'min': 1, 'max': 200},\n        {'check': 'freshness', 'date_col': 'fecha_inauguracion', 'max_age_days': 36500},\n    ],\n    'fact_matriculas_diarias': [\n        {'check': 'nulls', 'columns': ['fecha_matricula', 'campus_id']},\n        {'check': 'value_range', 'col': 'arancel_promedio_clp', 'min': 0, 'max': 5000000},\n        {'check': 'value_range', 'col': 'sla_cumplimiento_pct', 'min': 0, 'max': 1},\n        {'check': 'referential_integrity', 'fk_col': 'campus_id', 'ref_table': 'workshop_genie_code.gold.dim_campus', 'pk_col': 'campus_id'},\n    ],\n    # ... más tablas\n}\n```\n\n2. **Runner** — función run_all_checks(dq_rules, catalog, schema) que:\n   - Ejecuta todas las reglas\n   - Retorna un DataFrame Spark con: run_id (UUID), run_timestamp, table_name, check_name, status, metric, detail\n\nIncluye reglas para las 5 tablas (mínimo 3 por tabla = 15+ reglas).\nEjecuta y muestra los resultados.\n\n3. Al ejecutar, persiste los resultados en `workshop_genie_code.gold.{nombre_usuario}_dq_audit`.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Un diccionario con 15+ reglas, una función runner que produce un DataFrame con todos los resultados. Al ejecutar, se detectan múltiples FAIL y WARN.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "Este framework es production-ready: cambia el diccionario para tus tablas y ya tienes DQ automatizado.",
+            "El formato del resultado está diseñado para escribirse en una tabla de auditoría (Step 7)."
+          ],
+          "warningNote": null
+        },
+        {
+          "id": "gov-step-4",
+          "stepNumber": 4,
+          "title": "Scaffold de políticas CLS y RLS",
+          "description": "Genera las definiciones de Row-Level Security y Column-Level Security para los datos del catálogo workshop_genie_code.",
+          "prompt": "Primero, genera CTAS para crear copias personales (solo una vez) desde las tablas compartidas:\n- `workshop_genie_code.gold.{nombre_usuario}_dim_campus` ← `workshop_genie_code.gold.dim_campus`\n- `workshop_genie_code.gold.{nombre_usuario}_fact_portal_uc_activity` ← `workshop_genie_code.gold.fact_portal_uc_activity`\n- `workshop_genie_code.gold.{nombre_usuario}_fact_daily_kpis` ← `workshop_genie_code.gold.fact_daily_kpis`\n\nLuego genera los comandos SQL para implementar políticas de seguridad sobre **tus tablas personales**:\n\n1. **Column-Level Security (CLS)**:\n   - Tabla {nombre_usuario}_fact_portal_uc_activity: la columna monto_clp solo debe ser visible para el grupo 'vicerrectoria_team'. Para otros, debe mostrar NULL.\n   - Tabla {nombre_usuario}_dim_campus: latitude y longitude solo visibles para 'registro_academico_team'.\n\n2. **Row-Level Security (RLS)**:\n   - Tabla {nombre_usuario}_dim_campus: cada usuario solo ve campus de su region. Usa una función que mapee el usuario a su region (e.g., user 'caba_ops' → region = 'CAM').\n   - Tabla {nombre_usuario}_fact_daily_kpis: misma lógica (la tabla tiene columna region directamente).\n\n3. **Genera una tabla de mapeo** `workshop_genie_code.gold.{nombre_usuario}_users_region_mapping` con: username, region, role\n\n4. **Genera los GRANT y REVOKE** necesarios para que funcione.\n\n5. **Genera una query de validación** que pruebe que las políticas funcionan.\n\n**Convención de tablas personales:** Toda tabla que **crees** debe llamarse `workshop_genie_code.<schema>.{nombre_usuario}_<nombre_tabla>` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Usa `{nombre_usuario}` normalizado desde tu `current_user()` (parte antes del @, minúsculas, puntos → guiones bajos). Las 5 tablas compartidas del workshop en `workshop_genie_code.gold` (`dim_campus`, `fact_matriculas_diarias`, `fact_portal_uc_activity`, `fact_campanas_admision`, `fact_daily_kpis`) son **solo lectura** — no uses `overwrite` sobre ellas.",
+          "expectedOutput": "Comandos SQL para CREATE FUNCTION (row filter), ALTER TABLE SET ROW FILTER, ALTER TABLE ALTER COLUMN SET MASK y los GRANTs correspondientes. Más una query de validación.",
+          "tips": [
+            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
+            "CLS y RLS son fundamentales para cumplir con la Ley 19.628 de Protección de Datos Personales en Chile.",
+            "Una vez implementadas, Genie Spaces y dashboards respetan automáticamente estas políticas."
+          ],
+          "warningNote": "Los comandos CLS/RLS requieren permisos de OWNER en las tablas. En el workshop, generamos el código pero no lo ejecutamos."
+        },
+        {
+          "id": "gov-step-8",
+          "stepNumber": 5,
+          "title": "Reflexión: ¿dónde aplicas esto mañana?",
+          "description": "Último paso. Piensa en tus proyectos de governance y Data Academy.",
+          "prompt": null,
+          "expectedOutput": null,
+          "tips": [
+            "1. ¿Qué tablas de producción de PUC necesitan un profiling de calidad urgente?",
+            "2. ¿Qué notebook de Data Academy generarías primero para el programa de AI Fluency?",
+            "3. ¿Cómo podrías usar Genie Code para automatizar el cumplimiento de la Ley 19.628?"
+          ],
+          "warningNote": null
+        }
+      ],
+      "faq": [
+        {
+          "question": "Las funciones de DQ son lentas en tablas grandes",
+          "answer": "Usa .sample(0.1) para probar con un 10% de los datos primero, luego ejecuta en full cuando estés seguro de que funciona."
+        },
+        {
+          "question": "¿Cómo conecto el DQ framework a alertas reales?",
+          "answer": "El Job de Databricks soporta notificaciones por email, Slack (via webhook), o PagerDuty. Configúralo en el Step 7."
+        },
+        {
+          "question": "¿Los comandos CLS/RLS del Step 4 se pueden ejecutar?",
+          "answer": "En el workshop no, porque requieren permisos de OWNER. Pero el código generado es correcto y listo para aplicar en producción con los permisos adecuados."
+        },
+        {
+          "question": "¿Puedo generar notebooks de Data Academy sobre otros temas?",
+          "answer": "Sí. Cambia el tema en el prompt del Step 5: 'Introducción a PySpark', 'Cómo usar MLflow', 'Buenas prácticas de Delta Lake', etc."
+        }
+      ]
+    }
+  ]
+}
