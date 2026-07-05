@@ -159,16 +159,17 @@
         {
           "id": "bi-step-7",
           "stepNumber": 4,
-          "title": "Genie Supervisor: conecta múltiples espacios",
-          "description": "Un Genie Supervisor puede orquestar múltiples Genie Spaces para responder preguntas que cruzan dominios (Admisión y Registro Académico + Comercial + PUC24).",
-          "prompt": "Explica y genera la configuración para un Genie Supervisor que conecte 3 Genie Spaces:\n\n1. Space 'Admisión y Registro Académico': tablas fact_matriculas_diarias, dim_campus\n2. Space 'Admisión y Campañas': tablas fact_campanas_admision, fact_portal_uc_activity\n3. Space 'KPIs Ejecutivos': tabla fact_daily_kpis\n\nEl Supervisor debe:\n- Determinar automáticamente qué Space(s) consultar según la pregunta\n- Combinar resultados si la pregunta cruza dominios\n- Responder en español\n\nGenera las instrucciones del Supervisor y un ejemplo de cómo respondería a: '¿Qué promociones impactaron más el ingreso de matrículas de la región Región Metropolitana en el último trimestre y cuántos miembros pucX participaron?'\n\nEn las instrucciones, referencia las tablas compartidas del workshop por su nombre completo (`workshop_genie_code.gold.<tabla>`). Cada participante configura su propio Supervisor; no se requieren tablas nuevas.",
-          "expectedOutput": "Una explicación del patrón Supervisor con instrucciones de routing, y un ejemplo de cómo el Supervisor delegaría la pregunta a los Spaces de Admisión y Registro Académico y Admisión para combinar la respuesta.",
+          "title": "Despliega una Databricks App buscador de campus",
+          "description": "Lleva tus análisis a un consumidor final. Usa Genie Code para crear y desplegar una Databricks App con Gradio que permita buscar campus de la PUC en tiempo real.",
+          "prompt": "Crea una Databricks App llamada `{nombre_usuario}-buscador-campus` que permita buscar información de campus de la PUC.\n\n**Funcionalidad:**\n\n1. Un campo de texto donde el usuario ingrese un término de búsqueda (código UC, nombre de campus, comuna o región)\n2. La app consulta `classic_stable_rpm8ba_catalog.gold.dim_campus` filtrando por coincidencia parcial (LIKE, case-insensitive) en las columnas: `codigo_uc`, `campus_nombre`, `comuna`, `region_nombre`\n3. Muestra los resultados en una tabla con: código UC, nombre campus, región, comuna, tipo campus, capacidad anual\n4. Si no hay resultados, mostrar mensaje \"No se encontraron campus para el término buscado\"\n\n**Stack técnico:**\n\n- Framework: Gradio\n- Conexión a datos: `databricks-sdk` usando `StatementExecutionAPI`\n- **IMPORTANTE:** Para parámetros SQL usar `StatementParameterListItem` (NO dicts planos — los dicts lanzan `'dict' object has no attribute 'as_dict'`)\n- Autenticación: workspace-native (sin credenciales hardcodeadas)\n- Puerto: `8000` en `0.0.0.0`\n\n**Archivos:**\n\n- `app.py` — Lógica de búsqueda + UI Gradio\n- `app.yaml` — Config con `command: [python, app.py]` y env var `DATABRICKS_WAREHOUSE_ID`\n\n**Convención de nombres:** Prefijo `{nombre_usuario}_` normalizado desde `current_user()` (parte antes del `@`, minúsculas, puntos → guiones bajos).",
+          "expectedOutput": "Dos archivos listos para desplegar: `app.py` con UI Gradio y consulta SQL parametrizada vía StatementExecutionAPI, y `app.yaml` con el comando de arranque y la variable `DATABRICKS_WAREHOUSE_ID`.",
           "tips": [
-            "Cada participante crea tablas con prefijo `{nombre_usuario}_` (ej. `workshop_genie_code.gold.{nombre_usuario}_campus_summary`). Normaliza tu usuario desde `current_user()` antes de ejecutar.",
-            "El Genie Supervisor es un patrón avanzado — hoy vemos la arquitectura, la implementación puede ser un proyecto de seguimiento con el equipo de datos.",
-            "Ideal para preguntas ejecutivas que necesitan datos de varios dominios."
+            "Normaliza `{nombre_usuario}` desde `current_user()` (parte antes del `@`, minúsculas, puntos → guiones bajos) para el nombre de la app.",
+            "Usa `StatementParameterListItem` para los parámetros SQL — los dicts planos fallan con `'dict' object has no attribute 'as_dict'`.",
+            "Configura `DATABRICKS_WAREHOUSE_ID` en `app.yaml` con el ID de un SQL warehouse del workspace antes de desplegar.",
+            "Despliega con `databricks apps deploy` desde la carpeta del proyecto una vez que tengas los archivos generados."
           ],
-          "warningNote": null
+          "warningNote": "Este paso requiere acceso a un SQL warehouse y permisos para crear Databricks Apps. Si no puedes desplegar, revisa el código generado con el facilitador."
         },
         {
           "id": "bi-step-8",
