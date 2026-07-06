@@ -9,6 +9,22 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    """Evita que el navegador sirva HTML/JS cacheado de otra edición del workshop."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.endswith((".html", ".js", ".json")) or path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
 
 app = FastAPI(title="Genie Code Workshop — PUC", version="1.0.0")
 
@@ -18,6 +34,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(NoCacheMiddleware)
 
 DATA_PATH = Path(__file__).parent / "data" / "tracks.json"
 with open(DATA_PATH, "r", encoding="utf-8") as f:
